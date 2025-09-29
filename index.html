@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>高级电路仿真器</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: #0a0e27;
+            color: #fff;
+            overflow: hidden;
+        }
+        
+        .app-container {
+            display: grid;
+            grid-template-columns: 250px 1fr 350px;
+            height: 100vh;
+        }
+        
+        .sidebar {
+            background: #1a1f3a;
+            padding: 20px;
+            overflow-y: auto;
+            border-right: 1px solid #2a2f4a;
+        }
+        
+        .sidebar h2 {
+            font-size: 18px;
+            margin-bottom: 15px;
+            color: #4fc3f7;
+        }
+        
+        .component-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .component-item {
+            background: #2a2f4a;
+            padding: 12px;
+            border-radius: 6px;
+            cursor: grab;
+            transition: all 0.2s;
+            border: 2px solid transparent;
+        }
+        
+        .component-item:hover {
+            background: #3a3f5a;
+            border-color: #4fc3f7;
+        }
+        
+        .component-item:active {
+            cursor: grabbing;
+        }
+        
+        .canvas-area {
+            position: relative;
+            background: #0f1425;
+            overflow: hidden;
+        }
+        
+        #circuitCanvas {
+            width: 100%;
+            height: 100%;
+            cursor: crosshair;
+        }
+        
+        .toolbar {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(26, 31, 58, 0.95);
+            padding: 15px;
+            border-radius: 8px;
+            display: flex;
+            gap: 10px;
+        }
+        
+        .tool-btn {
+            padding: 8px 16px;
+            background: #2a2f4a;
+            border: none;
+            border-radius: 4px;
+            color: #fff;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .tool-btn:hover {
+            background: #4fc3f7;
+        }
+        
+        .tool-btn.active {
+            background: #4fc3f7;
+            box-shadow: 0 0 10px rgba(79, 195, 247, 0.5);
+        }
+        
+        .results-panel {
+            background: #1a1f3a;
+            padding: 20px;
+            overflow-y: auto;
+            border-left: 1px solid #2a2f4a;
+        }
+        
+        .results-panel h2 {
+            font-size: 18px;
+            margin-bottom: 15px;
+            color: #4fc3f7;
+        }
+        
+        .waveform-container {
+            background: #2a2f4a;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+        
+        .waveform-container h3 {
+            font-size: 14px;
+            margin-bottom: 10px;
+            color: #81c784;
+        }
+        
+        .chart-wrapper {
+            height: 150px;
+            position: relative;
+        }
+        
+        .controls-section {
+            background: #2a2f4a;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+        
+        .control-row {
+            margin-bottom: 10px;
+        }
+        
+        .control-row label {
+            display: block;
+            font-size: 12px;
+            color: #aaa;
+            margin-bottom: 5px;
+        }
+        
+        .control-row input, .control-row select {
+            width: 100%;
+            padding: 6px;
+            background: #1a1f3a;
+            border: 1px solid #3a3f5a;
+            color: #fff;
+            border-radius: 4px;
+        }
+        
+        .run-btn {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            border-radius: 6px;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        
+        .run-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .netlist-display {
+            background: #1a1f3a;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            max-height: 200px;
+            overflow-y: auto;
+            margin-top: 10px;
+        }
+        
+        .status-bar {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(26, 31, 58, 0.95);
+            padding: 10px 15px;
+            border-radius: 6px;
+            font-size: 12px;
+            color: #81c784;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- 左侧元器件库 -->
+        <div class="sidebar">
+            <h2>📦 元器件库</h2>
+            <div class="component-list">
+                <div class="component-item" draggable="true" data-type="resistor">
+                    🔴 电阻 (R)
+                </div>
+                <div class="component-item" draggable="true" data-type="capacitor">
+                    🟡 电容 (C)
+                </div>
+                <div class="component-item" draggable="true" data-type="inductor">
+                    🟣 电感 (L)
+                </div>
+                <div class="component-item" draggable="true" data-type="vsource">
+                    🟢 电压源 (V)
+                </div>
+                <div class="component-item" draggable="true" data-type="ground">
+                    ⚫ 地 (GND)
+                </div>
+                <div class="component-item" draggable="true" data-type="probe">
+                    🔍 探针
+                </div>
+            </div>
+            
+            <div style="margin-top: 30px;">
+                <h2>📋 网表</h2>
+                <div class="netlist-display" id="netlistDisplay">
+                    拖动元器件到画布开始设计...
+                </div>
+            </div>
+        </div>
+        
+        <!-- 中间画布区域 -->
+        <div class="canvas-area">
+            <div class="toolbar">
+                <button class="tool-btn active" data-mode="select" title="选择">✋</button>
+                <button class="tool-btn" data-mode="wire" title="连线">🔗</button>
+                <button class="tool-btn" data-mode="delete" title="删除">🗑️</button>
+                <button class="tool-btn" onclick="clearCanvas()" title="清空">🔄</button>
+            </div>
+            
+            <canvas id="circuitCanvas"></canvas>
+            
+            <div class="status-bar" id="statusBar">
+                准备就绪
+            </div>
+        </div>
+        
+        <!-- 右侧结果面板 -->
+        <div class="results-panel">
+            <h2>⚡ 仿真结果</h2>
+            
+            <div class="controls-section">
+                <h3 style="color: #4fc3f7; margin-bottom: 10px;">仿真设置</h3>
+                <div class="control-row">
+                    <label>仿真时间 (ms)</label>
+                    <input type="number" id="simDuration" value="20">
+                </div>
+                <div class="control-row">
+                    <label>时间步长 (μs)</label>
+                    <input type="number" id="simTimestep" value="10">
+                </div>
+                <button class="run-btn" onclick="runSimulation()">
+                    ▶️ 运行仿真
+                </button>
+            </div>
+            
+            <div id="waveformsContainer"></div>
+        </div>
+    </div>
+
+    <script>
+        // 全局变量
+        const canvas = document.getElementById('circuitCanvas');
+        const ctx = canvas.getContext('2d');
+        let components = [];
+        let wires = [];
+        let selectedComponent = null;
+        let wireStart = null;
+        let currentMode = 'select';
+        let draggedComponent = null;
+        let probes = [];
+        let charts = {};
+        let componentCounter = { R: 0, C: 0, L: 0, V: 0 };
+        
+        // 初始化画布
+        function initCanvas() {
+            canvas.width = canvas.offsetWidth;
+            canvas.height = canvas.offsetHeight;
+            draw();
+        }
+        
+        // 组件类
+        class Component {
+            constructor(type, x, y) {
+                this.type = type;
+                this.x = x;
+                this.y = y;
+                this.width = 80;
+                this.height = 50;
+                this.name = this.generateName();
+                this.value = this.getDefaultValue();
+                this.pins = this.generatePins();
+                this.selected = false;
+            }
+            
+            generateName() {
+                const prefix = this.type.charAt(0).toUpperCase();
+                if (this.type === 'ground') return 'GND';
+                if (this.type === 'probe') return `P${++componentCounter.P || 1}`;
+                componentCounter[prefix] = (componentCounter[prefix] || 0) + 1;
+                return `${prefix}${componentCounter[prefix]}`;
+            }
+            
+            getDefaultValue() {
+                const defaults = {
+                    resistor: 1000,
+                    capacitor: 10e-6,
+                    inductor: 100e-3,
+                    vsource: 5
+                };
+                return defaults[this.type] || 0;
+            }
+            
+            generatePins() {
+                if (this.type === 'ground') {
+                    return [{x: 40, y: 0, name: 'pin1'}];
+                }
+                if (this.type === 'probe') {
+                    return [{x: 40, y: 25, name: 'probe'}];
+                }
+                return [
+                    {x: 0, y: 25, name: 'pin1'},
+                    {x: 80, y: 25, name: 'pin2'}
+                ];
+            }
+            
+            draw(ctx) {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                
+                // 绘制主体
+                const colors = {
+                    resistor: '#e74c3c',
+                    capacitor: '#f39c12',
+                    inductor: '#9b59b6',
+                    vsource: '#27ae60',
+                    ground: '#95a5a6',
+                    probe: '#3498db'
+                };
+                
+                ctx.fillStyle = colors[this.type] || '#4a90e2';
+                ctx.fillRect(0, 0, this.width, this.height);
+                
+                if (this.selected) {
+                    ctx.strokeStyle = '#4fc3f7';
+                    ctx.lineWidth = 3;
+                    ctx.strokeRect(-2, -2, this.width + 4, this.height + 4);
+                }
+                
+                // 绘制文本
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 12px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(this.name, this.width/2, 20);
+                
+                // 绘制数值
+                let valueText = '';
+                if (this.type === 'resistor') valueText = `${this.value}Ω`;
+                else if (this.type === 'capacitor') valueText = `${(this.value * 1e6).toFixed(1)}μF`;
+                else if (this.type === 'inductor') valueText = `${(this.value * 1e3).toFixed(1)}mH`;
+                else if (this.type === 'vsource') valueText = `${this.value}V`;
+                
+                if (valueText) {
+                    ctx.font = '10px Arial';
+                    ctx.fillText(valueText, this.width/2, 35);
+                }
+                
+                // 绘制引脚
+                this.pins.forEach(pin => {
+                    ctx.fillStyle = '#fff';
+                    ctx.beginPath();
+                    ctx.arc(pin.x, pin.y, 4, 0, 2 * Math.PI);
+                    ctx.fill();
+                    ctx.strokeStyle = '#000';
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                });
+                
+                ctx.restore();
+            }
+            
+            containsPoint(px, py) {
+                return px >= this.x && px <= this.x + this.width &&
+                       py >= this.y && py <= this.y + this.height;
+            }
+            
+            getPinAt(px, py) {
+                for (let pin of this.pins) {
+                    const pinX = this.x + pin.x;
+                    const pinY = this.y + pin.y;
+                    const dist = Math.sqrt((px - pinX)**2 + (py - pinY)**2);
+                    if (dist < 8) return pin;
+                }
+                return null;
+            }
+        }
+        
+        // 连线类
+        class Wire {
+            constructor(comp1, pin1, comp2, pin2) {
+                this.comp1 = comp1;
+                this.pin1 = pin1;
+                this.comp2 = comp2;
+                this.pin2 = pin2;
+            }
+            
+            draw(ctx) {
+                const x1 = this.comp1.x + this.pin1.x;
+                const y1 = this.comp1.y + this.pin1.y;
+                const x2 = this.comp2.x + this.pin2.x;
+                const y2 = this.comp2.y + this.pin2.y;
+                
+                ctx.strokeStyle = '#ffeb3b';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.stroke();
+                
+                // 绘制端点
+                ctx.fillStyle = '#ffeb3b';
+                ctx.beginPath();
+                ctx.arc(x1, y1, 5, 0, 2 * Math.PI);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(x2, y2, 5, 0, 2 * Math.PI);
+                ctx.fill();
+            }
+        }
+        
+        // 绘制函数
+        function draw() {
+            ctx.fillStyle = '#0f1425';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // 绘制网格
+            ctx.strokeStyle = '#1a1f3a';
+            ctx.lineWidth = 1;
+            for (let x = 0; x < canvas.width; x += 20) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, canvas.height);
+                ctx.stroke();
+            }
+            for (let y = 0; y < canvas.height; y += 20) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(canvas.width, y);
+                ctx.stroke();
+            }
+            
+            // 绘制连线
+            wires.forEach(wire => wire.draw(ctx));
+            
+            // 绘制元器件
+            components.forEach(comp => comp.draw(ctx));
+            
+            // 绘制临时连线
+            if (wireStart && currentMode === 'wire') {
+                const mousePos = getMousePos();
+                ctx.strokeStyle = '#4fc3f7';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([5, 5]);
+                ctx.beginPath();
+                ctx.moveTo(wireStart.x, wireStart.y);
+                ctx.lineTo(mousePos.x, mousePos.y);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+        }
+        
+        let mouseX = 0, mouseY = 0;
+        function getMousePos() {
+            return {x: mouseX, y: mouseY};
+        }
+        
+        // 事件处理
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            mouseX = e.clientX - rect.left;
+            mouseY = e.clientY - rect.top;
+            
+            if (draggedComponent) {
+                draggedComponent.x = mouseX - 40;
+                draggedComponent.y = mouseY - 25;
+            }
+            
+            draw();
+        });
+        
+        canvas.addEventListener('mousedown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            if (currentMode === 'select') {
+                components.forEach(comp => comp.selected = false);
+                const clicked = components.find(comp => comp.containsPoint(x, y));
+                if (clicked) {
+                    clicked.selected = true;
+                    draggedComponent = clicked;
+                    selectedComponent = clicked;
+                }
+            } else if (currentMode === 'wire') {
+                if (!wireStart) {
+                    // 开始连线
+                    for (let comp of components) {
+                        const pin = comp.getPinAt(x, y);
+                        if (pin) {
+                            wireStart = {
+                                comp: comp,
+                                pin: pin,
+                                x: comp.x + pin.x,
+                                y: comp.y + pin.y
+                            };
+                            break;
+                        }
+                    }
+                } else {
+                    // 完成连线
+                    for (let comp of components) {
+                        const pin = comp.getPinAt(x, y);
+                        if (pin && comp !== wireStart.comp) {
+                            wires.push(new Wire(wireStart.comp, wireStart.pin, comp, pin));
+                            wireStart = null;
+                            updateNetlist();
+                            break;
+                        }
+                    }
+                    if (wireStart) wireStart = null; // 取消连线
+                }
+            } else if (currentMode === 'delete') {
+                const clicked = components.findIndex(comp => comp.containsPoint(x, y));
+                if (clicked !== -1) {
+                    components.splice(clicked, 1);
+                    updateNetlist();
+                }
+            }
+            
+            draw();
+        });
+        
+        canvas.addEventListener('mouseup', () => {
+            draggedComponent = null;
+        });
+        
+        // 拖放元器件
+        document.querySelectorAll('.component-item').forEach(item => {
+            item.addEventListener('dragstart', (e) => {
+                e.dataTransfer.setData('type', item.dataset.type);
+            });
+        });
+        
+        canvas.addEventListener('dragover', (e) => {
+            e.preventDefault();
+        });
+        
+        canvas.addEventListener('drop', (e) => {
+            e.preventDefault();
+            const type = e.dataTransfer.getData('type');
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left - 40;
+            const y = e.clientY - rect.top - 25;
+            
+            const comp = new Component(type, x, y);
+            components.push(comp);
+            
+            if (type === 'probe') {
+                probes.push(comp);
+            }
+            
+            draw();
+            updateNetlist();
+            updateStatus(`添加了 ${comp.name}`);
+        });
+        
+        // 工具栏
+        document.querySelectorAll('.tool-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                if (btn.dataset.mode) {
+                    document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    currentMode = btn.dataset.mode;
+                    wireStart = null;
+                    updateStatus(`模式: ${currentMode}`);
+                }
+            });
+        });
+        
+        function clearCanvas() {
+            components = [];
+            wires = [];
+            probes = [];
+            componentCounter = { R: 0, C: 0, L: 0, V: 0 };
+            draw();
+            updateNetlist();
+            updateStatus('画布已清空');
+        }
+        
+        // 更新网表显示
+        function updateNetlist() {
+            let netlist = '* SPICE Netlist\n';
+            netlist += `* Generated: ${new Date().toLocaleString()}\n\n`;
+            
+            components.forEach(comp => {
+                if (comp.type === 'ground' || comp.type === 'probe') return;
+                
+                const conn1 = findConnectedNet(comp, 'pin1');
+                const conn2 = findConnectedNet(comp, 'pin2');
+                
+                let line = '';
+                if (comp.type === 'resistor') {
+                    line = `${comp.name} ${conn1} ${conn2} ${comp.value}`;
+                } else if (comp.type === 'capacitor') {
+                    line = `${comp.name} ${conn1} ${conn2} ${comp.value}`;
+                } else if (comp.type === 'inductor') {
+                    line = `${comp.name} ${conn1} ${conn2} ${comp.value}`;
+                } else if (comp.type === 'vsource') {
+                    line = `${comp.name} ${conn1} ${conn2} DC ${comp.value}`;
+                }
+                
+                if (line) netlist += line + '\n';
+            });
+            
+            document.getElementById('netlistDisplay').textContent = netlist;
+        }
+        
+        function findConnectedNet(comp, pinName) {
+            const pin = comp.pins.find(p => p.name === pinName);
+            if (!pin) return '0';
+            
+            // 查找连接到GND的线
+            for (let wire of wires) {
+                if ((wire.comp1 === comp && wire.pin1 === pin) ||
+                    (wire.comp2 === comp && wire.pin2 === pin)) {
+                    const otherComp = wire.comp1 === comp ? wire.comp2 : wire.comp1;
+                    if (otherComp.type === 'ground') return '0';
+                }
+            }
+            
+            // 否则返回节点编号
+            return `n${comp.name}_${pinName}`;
+        }
+        
+        function updateStatus(msg) {
+            document.getElementById('statusBar').textContent = msg;
+        }
+        
+        // 仿真函数
+        function runSimulation() {
+            if (components.length === 0) {
+                alert('请先添加元器件！');
+                return;
+            }
+            
+            updateStatus('正在运行仿真...');
+            
+            // 简化仿真：只处理RC电路
+            const duration = parseFloat(document.getElementById('simDuration').value) * 1e-3;
+            const dt = parseFloat(document.getElementById('simTimestep').value) * 1e-6;
+            
+            // 查找电路元件
+            const resistor = components.find(c => c.type === 'resistor');
+            const capacitor = components.find(c => c.type === 'capacitor');
+            const vsource = components.find(c => c.type === 'vsource');
+            
+            if (!resistor || !capacitor || !vsource) {
+                alert('请添加至少一个电阻、电容和电压源！');
+                return;
+            }
+            
+            // 运行RC电路仿真
+            const results = simulateRCCircuit(resistor.value, capacitor.value, vsource.value, duration, dt);
+            
+            // 显示波形
+            displayWaveforms(results);
+            
+            updateStatus('仿真完成！');
+        }
+        
+        function simulateRCCircuit(R, C, Vin, duration, dt) {
+            const steps = Math.floor(duration / dt);
+            const time = [];
+            const vIn = [];
+            const vR = [];
+            const vC = [];
+            const current = [];
+            
+            let Vc = 0;
+            const tau = R * C;
+            
+            for (let i = 0; i < steps; i++) {
+                const t = i * dt;
+                const dVc = (Vin - Vc) / tau;
+                Vc += dVc * dt;
+                
+                const I = C * dVc;
+                const Vr = I * R;
+                
+                time.push(t * 1000); // 转换为ms
+                vIn.push(Vin);
+                vR.push(Vr);
+                vC.push(Vc);
+                current.push(I * 1000); // 转换为mA
+            }
+            
+            return { time, vIn, vR, vC, current };
+        }
+        
+        function displayWaveforms(results) {
+            const container = document.getElementById('waveformsContainer');
+            container.innerHTML = '';
+            
+            const waveforms = [
+                { title: '输入电压', data: results.vIn, color: '#4fc3f7', unit: 'V' },
+                { title: '电容电压', data: results.vC, color: '#f39c12', unit: 'V' },
+                { title: '电阻电压', data: results.vR, color: '#e74c3c', unit: 'V' },
+                { title: '电流', data: results.current, color: '#81c784', unit: 'mA' }
+            ];
+            
+            waveforms.forEach((wf, idx) => {
+                const div = document.createElement('div');
+                div.className = 'waveform-container';
+                div.innerHTML = `
+                    <h3>${wf.title}</h3>
+                    <div class="chart-wrapper">
+                        <canvas id="chart${idx}"></canvas>
+                    </div>
+                `;
+                container.appendChild(div);
+                
+                const canvas = document.getElementById(`chart${idx}`);
+                const ctx = canvas.getContext('2d');
+                
+                if (charts[`chart${idx}`]) {
+                    charts[`chart${idx}`].destroy();
+                }
+                
+                charts[`chart${idx}`] = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: results.time,
+                        datasets: [{
+                            label: wf.title,
+                            data: wf.data,
+                            borderColor: wf.color,
+                            backgroundColor: wf.color + '20',
+                            borderWidth: 2,
+                            pointRadius: 0,
+                            tension: 0.1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        animation: false,
+                        plugins: {
+                            legend: { display: false }
+                        },
+                        scales: {
+                            x: {
+                                display: false
+                            },
+                            y: {
+                                ticks: {
+                                    color: '#aaa',
+                                    font: { size: 10 }
+                                },
+                                grid: { color: '#1a1f3a' }
+                            }
+                        }
+                    }
+                });
+            });
+        }
+        
+        // 初始化
+        window.addEventListener('load', initCanvas);
+        window.addEventListener('resize', initCanvas);
+    </script>
+</body>
+</html>
