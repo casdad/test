@@ -7,4 +7,7 @@
    添加手动删除线段功能
    添加调整参数功能
 
+<img width="637" height="778" alt="image" src="https://github.com/user-attachments/assets/0eb02893-2c6b-40ba-ac1c-b60a8531d858" />
+
+
 
